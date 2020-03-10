@@ -1,0 +1,130 @@
+---
+title: "201 Assignment 2"
+author: "Julia Dagum"
+date: "March 9, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(psych)
+library(stargazer)
+
+```
+
+### Part 1. Crop yields vs. time
+
+```{r}
+
+# Read in data
+fert <- read_csv("fertilizer_2020.csv")
+grain <- read_csv("grain_2020.csv")
+
+# finalized plot of yield vs. time for each grain in the dataset
+
+ggplot(data = grain, aes(x = year, 
+                         y = yield, 
+                         color = commodity)) +
+  geom_line(size = 0.8) +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0)) +
+  labs(title = "U.S. grain yields from 1866 - 2018", 
+       x = "Year", 
+       y = "Yield (bushels per hectare)",
+       color = "Grain", 
+       caption = "Line graph showing yields in bushels per hectare of four different crops grown in the U.S. from 1866 - 2018. \nBarley is shown in orange, corn in green, oats in teal and sorghum in purple.")
+
+# Get just corn data 
+corn_data <- grain %>% 
+  filter(commodity == "Corn")
+
+# Find linear plateau model for corn
+# ---------
+# First find reasonable initial values for parameters
+fit.lm = lm(year ~ yield, data = corn_data)
+a.ini     = fit.lm$coefficients[1]
+b.ini     = fit.lm$coefficients[2]
+clx.ini   = mean(corn_data$yield)
+
+# Define linear plateau function
+linplat = function(x, a, b, clx)
+          {ifelse(x < clx, a + b * x,
+                           a + b * clx)}
+
+# Find best fit parameters
+# model = nls(yield ~ linplat(time, a, b, clx),
+#             data = corn_data,
+#             start = list(a = a.ini,
+#              b = b.ini,
+#              clx = clx.ini),
+#             trace = FALSE,
+#             nls.control(maxiter = 1000))
+# 
+# summary(model)
+
+```
+
+### Part 2. Fertilizer Use
+
+```{r}
+# Fertilizer plot
+
+ggplot(data = fert, aes(x = year, 
+                         y = kg_h, 
+                         color = crop)) +
+  geom_line(size = 0.8) +
+  theme_minimal() +
+  facet_wrap(~ fertilizer) +
+  scale_x_continuous(breaks = c(1970, 1990, 2010)) +
+  theme(plot.caption = element_text(hjust = 0)) +
+  labs(title = "U.S. fertilizer application over time", 
+       x = "Year", 
+       y = "Fertilizer applied (Kg per hectare)",
+       color = "Crop", 
+       caption = "Line graph showing fertilizer applied to three different crops grown in the U.S. from 1966 - 2016. Graphs \nare shown for kilograms per hectare of Nitrogen, Potassium and Phosphorus. Corn is shown in orange, \nsoybeans in green and wheat in blue.")
+```
+
+### Corn yield vs. fertilizer use
+
+```{r}
+# Get fertilizer info for just corn 
+corn_fert <- fert %>% 
+  filter(crop == "Corn")
+
+# Select year, commodity and yield data from corn_data
+corn_yield <- corn_data %>% 
+  select("year", "commodity", "yield")
+
+# Join the two dataframes by year
+corn_join <- full_join(corn_fert, corn_yield, "year") %>% 
+  drop_na()
+
+# Graph yield vs. fertilizer use, separated by fertilizer type
+ggplot(data = corn_join, aes(x = kg_h, 
+                         y = yield, 
+                         color = year)) +
+  geom_point(size = 1) +
+  scale_color_continuous(low = "blue", high = "red") +
+  facet_wrap(~ fertilizer, scales = "free_x") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0)) +
+  labs(title = "Corn yield vs. fertilizer use", 
+       x = "Fertilizer applied (Kg per hectare)", 
+       y = "Yield (bushels per hectare)",
+       color = "Year", 
+       caption = "\nPlot showing yields vs. fertilizer use in corn grown in the U.S. from 1966 - 2016. Nitrogen, phosphate \nand potassium are shown in different panels. Points for each year are shown on a scale from blue to \nred signifying earlier to later years.")
+```
+
+```{r, results = 'asis'}
+# Fit a multiple linear regression with corn yield as outcome variable and any relevant explanatory variables
+
+corn_wider <- pivot_wider(corn_join, names_from = fertilizer, values_from = kg_h)
+
+corn_lm <- lm(yield ~ year + nitrogen + potassium, data = corn_wider)
+
+summary(corn_lm)
+stargazer(corn_lm, type = "html")
+
+```
+
